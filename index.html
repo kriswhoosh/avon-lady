@@ -25,7 +25,13 @@
         .img-slot { background: rgba(0,0,0,0.2); border: 1px solid var(--line); padding: 10px; margin-bottom: 8px; border-radius: 8px; font-size: 12px; }
         .img-slot.active { border-color: var(--pink); background: rgba(255, 122, 182, 0.1); }
         .viewer-box { position: relative; width: 1080px; height: 1920px; border: 2px solid var(--line); background: #fff; overflow: hidden; border-radius: 16px; transform-origin: top left; transform: scale(0.35); }
-        #paint-area { width: 1080px; height: 1920px; float: left; position: relative; box-sizing: border-box; }
+        #paint-area { width: 1080px; height: 1920px; float: left; position: relative; box-sizing: border-box; display: flex; flex-direction: row; }
+        .image-stage-wrap { display: flex; flex-direction: row; width: 100%; height: 100%; min-width: 0; }
+        .image-stage-left { width: 1080px; flex-shrink: 0; position: relative; }
+        .image-stage-right { position: absolute; right: 0; top: 0; width: 220px; height: 100%; display: flex; flex-direction: column; padding: 10px; box-sizing: border-box; pointer-events: none; }
+        .image-stage-right.meta-top { justify-content: flex-start; padding-top: 190px; }
+        .image-stage-right.meta-bottom { justify-content: flex-end; padding-bottom: 40px; }
+        .image-stage-right .img-meta { pointer-events: auto; }
         #text-area { display: none; }
         input[type="text"], textarea { width: 100%; background: var(--input-bg); color: var(--brand); border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
         .chip-container { display: flex; gap: 5px; margin-bottom: 15px; flex-wrap: wrap; }
@@ -36,9 +42,7 @@
         .rec-btn { background: var(--accent); color: #fff; width: 100%; padding: 20px; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; font-size: 16px; margin-bottom: 8px; }
         .insta-btn { background: var(--insta); color: #fff; width: 100%; padding: 20px; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; font-size: 16px; }
         canvas { display: none; }
-        .img-meta { position: absolute; left: 40px; background: #e3e3e3; padding: 10px 16px; border-radius: 10px; max-width: 460px; font-size: 18px; border: 1px solid #ccc; }
-        .img-meta.img-meta-bottom { bottom: 40px; }
-        .img-meta.img-meta-top { top: 190px; }
+        .img-meta { background: #e3e3e3; padding: 10px 16px; border-radius: 10px; max-width: 100%; font-size: 18px; border: 1px solid #ccc; pointer-events: auto; }
         .img-meta-price { font-weight: 800; color: #e5004b; margin-bottom: 6px; font-size: 22px; }
         .img-meta-desc { color: #333; font-size: 20px; }
     </style>
@@ -59,9 +63,10 @@
             <div class="chip" onclick="setTrans('swap')">SWAP</div>
         </div>
 
+        <!-- PRICE TAG & SHORT DESCRIPTION: fixed on RIGHT of image area — choose TOP or BOTTOM -->
         <div class="chip-container">
-            <div class="chip overlay-chip active" onclick="setOverlayPos('bottom')">PRICE: BOTTOM</div>
-            <div class="chip overlay-chip" onclick="setOverlayPos('top')">PRICE: TOP</div>
+            <div class="chip overlay-chip" onclick="setOverlayPos('top')">META: TOP</div>
+            <div class="chip overlay-chip active" onclick="setOverlayPos('bottom')">META: BOTTOM</div>
         </div>
 
         <button onclick="clearAlignment()" class="pink-btn">✔️ LOCK ALIGNMENT</button>
@@ -80,7 +85,12 @@
     
     <div class="viewer-box" id="viewerContainer">
         <div class="thumb-strip" id="thumbStrip"></div>
-        <div id="paint-area"><div id="stage"></div></div>
+        <div id="paint-area">
+            <div class="image-stage-wrap">
+                <div class="image-stage-left"><div id="stage"></div></div>
+                <div class="image-stage-right meta-bottom" id="meta-panel"></div>
+            </div>
+        </div>
         <div id="text-area"></div>
     </div>
 </div>
@@ -105,9 +115,14 @@
     function setOverlayPos(pos) {
         overlayPos = pos;
         document.querySelectorAll('.overlay-chip').forEach(c => {
-            const isBottom = c.innerText.toLowerCase().includes('bottom');
-            c.classList.toggle('active', (pos === 'bottom' && isBottom) || (pos === 'top' && !isBottom));
+            const isTop = c.innerText.toLowerCase().includes('top');
+            c.classList.toggle('active', (pos === 'top' && isTop) || (pos === 'bottom' && !isTop));
         });
+        const panel = document.getElementById('meta-panel');
+        if (panel) {
+            panel.classList.remove('meta-top', 'meta-bottom');
+            panel.classList.add('meta-' + pos);
+        }
         updateStage();
     }
     
@@ -181,8 +196,14 @@
     };
 
     function updateStage() {
-        const stage = document.getElementById('stage'); 
+        const stage = document.getElementById('stage');
+        const metaPanel = document.getElementById('meta-panel');
         stage.innerHTML = '';
+        if (metaPanel) metaPanel.innerHTML = '';
+        if (metaPanel) {
+            metaPanel.classList.remove('meta-top', 'meta-bottom');
+            metaPanel.classList.add('meta-' + overlayPos);
+        }
         if(alignIndex >= 0 && imageData[alignIndex].src) {
             const d = imageData[alignIndex];
             const img = new Image(); img.src = d.src;
@@ -192,12 +213,12 @@
 
             if (d.price || d.desc) {
                 const meta = document.createElement('div');
-                meta.className = 'img-meta img-meta-' + overlayPos;
+                meta.className = 'img-meta';
                 meta.innerHTML = `
                     <div class="img-meta-price">${d.price || ''}</div>
                     <div class="img-meta-desc">${d.desc || ''}</div>
                 `;
-                stage.appendChild(meta);
+                if (metaPanel) metaPanel.appendChild(meta);
             }
         }
     }
@@ -218,10 +239,10 @@
         source.buffer = audioBuffer; source.connect(dest); source.connect(audioCtx.destination);
         stream.addTrack(dest.stream.getAudioTracks()[0]); source.start(0);
 
-        const holdTime = 2000;
-        const totalTransTime = 60000;
-        const restingTime = 20000;
-        const totalDuration = holdTime + totalTransTime + restingTime;
+        // 6 slides, 20 seconds each, with steady 2s transform between each
+        const SLIDE_DURATION_MS = 20000;   // 20 seconds per slide
+        const TRANS_DURATION_MS = 2000;     // 2 second transition between slides
+        const totalDuration = activeImages.length * SLIDE_DURATION_MS;
 
         // Prefer MP4 (9:16-friendly) with high bitrate for sharp playback and correct aspect on mobile/Insta
         const width = canvas.width, height = canvas.height;
@@ -274,15 +295,17 @@
             ctx.fillStyle = "#ffffff";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 1080x1920 layout: TITLE 1080x120, SUBTITLE 1080x120, TEXT 1080x360, IMAGE 1080x1320
-            const instaTitleTop = 0, instaTitleH = 120;
-            const instaSubTop = 120, instaSubH = 120;
-            const instaTextTop = 240, instaTextH = 360;
-            const instaImgTop = 600, instaImgH = 1320;
-            const imgAreaW = 1080, imgAreaH = 1320;
+            // 1080x1920 layout: PADDING 0-80, TITLE 80-200, SUBTITLE 200-320, TEXT 320-680, IMAGE 680-1920 (1240h)
+            const instaPadH = 80;
+            const instaTitleTop = 80, instaTitleH = 120;
+            const instaSubTop = 200, instaSubH = 120;
+            const instaTextTop = 320, instaTextH = 360;
+            const instaImgTop = 680, instaImgH = 1240;
+            const imgAreaW = 1080, imgAreaH = instaImgH;
             const imgBaseX = 0, imgBaseY = instaImgTop;
             const textStartX = 0, textFrameW = 1080;
 
+            // Top padding 0-80: reserve for Instagram overlay so they don't cover TITLE (background already filled above)
             // Title bar: #e5004b with WHITE text
             ctx.fillStyle = "#e5004b";
             ctx.fillRect(0, instaTitleTop, canvas.width, instaTitleH);
@@ -298,56 +321,65 @@
             ctx.font = "bold 32px Segoe UI";
             ctx.fillText(subVal, 540, instaSubTop + 78);
 
-            // Image and Scroll Calculations
-            let curModeElap = elap - holdTime;
-            let tProg = Math.max(0, Math.min(curModeElap / totalTransTime, 1));
-            let gProg = Math.min(elap / totalDuration, 1);
+            // Image timing: 20s per slide, 2s transition at end of each segment (so all 6 slides get full 20s display)
+            const gProg = Math.min(elap / totalDuration, 1);
+            const segmentIndex = Math.min(Math.floor(elap / SLIDE_DURATION_MS), activeImages.length - 1);
+            const withinSegment = elap % SLIDE_DURATION_MS;
+            const inTransition = withinSegment >= (SLIDE_DURATION_MS - TRANS_DURATION_MS) && (segmentIndex + 1) < activeImages.length;
+            const transProgress = inTransition
+                ? (withinSegment - (SLIDE_DURATION_MS - TRANS_DURATION_MS)) / TRANS_DURATION_MS
+                : 0;
+            const sP = Math.max(0, Math.min(transProgress, 1));  // 0 = current slide, 1 = next slide
 
-            // Image Logic + active metadata
-            let activeMeta = null;
+            // Image Logic + active metadata (every slide gets 20s; steady transform between each)
+            const iA = activeImages[segmentIndex];
+            const iB = inTransition ? activeImages[segmentIndex + 1] : null;
+            const activeMeta = sP >= 0.5 && iB ? iB : iA;
+
             ctx.save();
             ctx.beginPath();
             ctx.rect(imgBaseX, imgBaseY, imgAreaW, instaImgH);
             ctx.clip();
 
-            if (elap < holdTime) {
-                const f = activeImages[0];
-                activeMeta = f;
-                ctx.translate(imgBaseX + f.x, imgBaseY + f.y);
-                ctx.scale(f.s, f.s);
-                ctx.drawImage(f.imgObj, 0, 0, imgAreaW, imgAreaH);
-            } else if (curModeElap < totalTransTime) {
-                let sW = 1 / (activeImages.length - 1), cIdx = Math.min(Math.floor(tProg / sW), activeImages.length - 2);
-                let sP = (tProg - (cIdx * sW)) / sW; const iA = activeImages[cIdx], iB = activeImages[cIdx+1];
-                activeMeta = sP < 0.5 ? iA : iB;
+            if (!iA || !iA.imgObj) {
+                // Skip draw if current slide has no image (safety)
+            } else if (!inTransition || !iB || !iB.imgObj) {
+                // Single slide: full 20s display (or last slide with no next)
+                ctx.translate(imgBaseX + iA.x, imgBaseY + iA.y);
+                ctx.scale(iA.s, iA.s);
+                ctx.drawImage(iA.imgObj, 0, 0, imgAreaW, imgAreaH);
+            } else {
+                // Steady transform between iA and iB
                 [iA, iB].forEach((img, i) => {
+                    if (!img.imgObj) return;
                     ctx.save();
-                    let xBase = imgBaseX + img.x; let yBase = imgBaseY + img.y;
-                    if(transMode === 'swipe') { let xOff = (i === 0) ? -sP * imgAreaW : imgAreaW - (sP * imgAreaW); ctx.translate(xBase + xOff, yBase); }
-                    else if (transMode === 'dissolve') { ctx.globalAlpha = (i === 0) ? 1 - sP : sP; ctx.translate(xBase, yBase); }
-                    else if (transMode === 'swap') { ctx.globalAlpha = (sP < 0.5 && i === 0) || (sP >= 0.5 && i === 1) ? 1 : 0; ctx.translate(xBase, yBase); }
-                    else { ctx.globalAlpha = (i === 0) ? 1 : sP; ctx.translate(xBase, yBase); }
+                    const xBase = imgBaseX + img.x, yBase = imgBaseY + img.y;
+                    if (transMode === 'swipe') {
+                        const xOff = (i === 0) ? -sP * imgAreaW : imgAreaW - (sP * imgAreaW);
+                        ctx.translate(xBase + xOff, yBase);
+                    } else if (transMode === 'dissolve') {
+                        ctx.globalAlpha = (i === 0) ? 1 - sP : sP;
+                        ctx.translate(xBase, yBase);
+                    } else if (transMode === 'swap') {
+                        ctx.globalAlpha = (sP < 0.5 && i === 0) || (sP >= 0.5 && i === 1) ? 1 : 0;
+                        ctx.translate(xBase, yBase);
+                    } else {
+                        ctx.globalAlpha = (i === 0) ? 1 : sP;
+                        ctx.translate(xBase, yBase);
+                    }
                     ctx.scale(img.s, img.s);
                     ctx.drawImage(img.imgObj, 0, 0, imgAreaW, imgAreaH);
                     ctx.restore();
                 });
-            } else {
-                const f = activeImages[activeImages.length - 1];
-                activeMeta = f;
-                ctx.translate(imgBaseX + f.x, imgBaseY + f.y);
-                ctx.scale(f.s, f.s);
-                ctx.drawImage(f.imgObj, 0, 0, imgAreaW, imgAreaH);
             }
             ctx.restore();
 
-            // Draw price tag + description: #e3e3e3 background, price #e5004b, description dark grey
+            // Draw price tag + description on RIGHT of image area; TOP or BOTTOM per choice
             if (activeMeta && (activeMeta.price || activeMeta.desc)) {
-                const boxX = 40;
+                const boxW = 520, boxH = 120, pad = 40;
+                const boxX = 1080 - boxW - pad;  // always right of image area
                 const isTop = overlayPos === 'top';
-                const instaImgTopForBox = imgBaseY;
-                const boxY = isTop ? instaImgTopForBox + 40 : instaImgTopForBox + 1320 - 160;
-                const boxW = 520;
-                const boxH = 120;
+                const boxY = isTop ? (imgBaseY + 40) : (imgBaseY + instaImgH - boxH - 40);
 
                 ctx.save();
                 ctx.fillStyle = "#e3e3e3";
